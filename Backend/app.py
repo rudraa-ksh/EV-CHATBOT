@@ -4,7 +4,7 @@ import re
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = "4b8e7e65f1f62af0b4a9f60c42f36e13"  # Required for session management
+app.secret_key = ""  # Required for session management
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -35,6 +35,18 @@ knowledge_base = {
             "no": "Visit a service center to check the battery health.",
         },
     ],
+    "starting": [
+        {
+            "question": "Is the battery fully charged?",
+            "yes": "Check the ignition system and starter motor.",
+            "no": "Charge the battery fully and try again."
+        },
+        {
+            "question": "Are there any error messages on the dashboard?",
+            "yes": "Refer to the owner's manual for specific error codes.",
+            "no": "Inspect fuses and circuit breakers for issues."
+        }
+    ],
 }
 
 def extract_keywords(user_input):
@@ -43,7 +55,7 @@ def extract_keywords(user_input):
     issues = []
 
     for token in doc:
-        if token.text.lower() in {"charging", "range", "battery", "power", "not"}:
+        if token.text.lower() in {"charging", "range", "battery", "power", "not", "low","starting"}:
             issues.append(token.text.lower())
     return " ".join(issues).strip()
 
