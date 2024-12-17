@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 import spacy
 import re
 
 # Initialize Flask app
 app = Flask(__name__)
+app.secret_key = "4b8e7e65f1f62af0b4a9f60c42f36e13"  # Required for session management
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -37,18 +38,17 @@ knowledge_base = {
 }
 
 def extract_keywords(user_input):
-    """Extracts keywords using spaCy and matches them to known issues."""
+    """Extract keywords using spaCy for matching issues."""
     doc = nlp(user_input)
-    negations = {"no", "not", "never", "refuse"}
     issues = []
 
     for token in doc:
-        if token.text.lower() in negations or token.text.lower() in {"charging", "range", "battery", "power"}:
+        if token.text.lower() in {"charging", "range", "battery", "power", "not"}:
             issues.append(token.text.lower())
     return " ".join(issues).strip()
 
 def match_issue(extracted_issue):
-    """Matches the extracted issue to a known issue in the knowledge base."""
+    """Match the issue to a known problem."""
     for issue in knowledge_base.keys():
         if re.search(issue, extracted_issue, re.IGNORECASE):
             return issue
@@ -57,15 +57,68 @@ def match_issue(extracted_issue):
 @app.route('/troubleshoot', methods=['POST'])
 def troubleshoot():
     data = request.json
-    user_input = data.get('issue', '')
-    extracted_issue = extract_keywords(user_input)
-    matched_issue = match_issue(extracted_issue)
-    
-    if matched_issue:
-        steps = knowledge_base[matched_issue]
-        return jsonify({"issue": matched_issue, "steps": steps})
+    user_input = data.get('issue', '').strip().lower()
+
+    # If no session exists, treat this as the first input
+    if "current_issue" not in session or "current_step" not in session:
+        extracted_issue = extract_keywords(user_input)
+        matched_issue = match_issue(extracted_issue)
+
+        if matched_issue:
+            session["current_issue"] = matched_issue
+            session["current_step"] = 0
+            session["awaiting_resolution_check"] = False
+            question = knowledge_base[matched_issue][0]["question"]
+            return jsonify({"response": question})
+        else:
+            return jsonify({"error": "Issue not recognized. Please provide more details."}), 400
+
+    # If awaiting resolution confirmation
+    if session.get("awaiting_resolution_check", False):
+        if user_input == "yes":
+            session.clear()
+            return jsonify({"response": "Thank you. Session has been reset."})
+        elif user_input == "no":
+            current_issue = session["current_issue"]
+            current_step = session["current_step"]
+            steps = knowledge_base[current_issue]
+
+            # Check if there are more questions
+            if current_step + 1 < len(steps):
+                session["current_step"] += 1  # Increment to the next step
+                session["awaiting_resolution_check"] = False  # Back to normal flow
+                next_question = steps[session["current_step"]]["question"]
+                return jsonify({"response": "Let's continue troubleshooting.", "next_question": next_question})
+            else:
+                session.clear()
+                return jsonify({"response": "Contact your nearest service center. Session has been reset."})
+        else:
+            return jsonify({"error": "Please respond with 'yes' or 'no'."}), 400
+
+    # Handle yes/no responses for ongoing sessions
+    current_issue = session["current_issue"]
+    current_step = session["current_step"]
+    steps = knowledge_base[current_issue]
+
+    if user_input in ["yes", "no"]:
+        response = steps[current_step][user_input]
+
+        # Check if there are more steps
+        if current_step + 1 < len(steps):
+            session["awaiting_resolution_check"] = True
+            return jsonify({"response": response, "next_question": "Is the problem solved?"})
+        else:
+            # Last step, ask if resolved
+            session["awaiting_resolution_check"] = True
+            return jsonify({"response": response, "next_question": "Is the problem solved?"})
     else:
-        return jsonify({"error": "Issue not recognized. Please provide more details."}), 400
+        return jsonify({"error": "Please respond with 'yes' or 'no'."}), 400
+
+@app.route('/reset', methods=['POST'])
+def reset_session():
+    """Resets the troubleshooting session."""
+    session.clear()
+    return jsonify({"message": "Session reset. Start troubleshooting again."})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
