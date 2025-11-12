@@ -6,7 +6,7 @@ This repository demonstrates how conversational AI can be integrated with EV-spe
 
 ---
 
-## 📚 Table of Contents
+## Table of Contents
 - [Key Features](#-key-features)
 - [Architecture & Design](#️-architecture--design)
 - [ech Stack](#-tech-stack)
@@ -24,7 +24,7 @@ This repository demonstrates how conversational AI can be integrated with EV-spe
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 - **Language:** Python , Dart  
 - **Front-End:** Flutter 
 - **Back-End:** Flask
